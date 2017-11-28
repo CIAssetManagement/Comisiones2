@@ -1,0 +1,19 @@
+
+Attaching package: 'dplyr'
+
+The following objects are masked from 'package:stats':
+
+    filter, lag
+
+The following objects are masked from 'package:base':
+
+    intersect, setdiff, setequal, union
+
+Loading required package: rJava
+Loading required package: xlsxjars
+Error in file(file, "rt") : no se puede abrir la conexión
+Calls: read.csv -> read.table -> file
+Además: Warning message:
+In file(file, "rt") :
+  no fue posible abrir el archivo 'datos2.csv': No such file or directory
+Ejecución interrumpida

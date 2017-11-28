@@ -10,10 +10,18 @@ library(xlsx)
 dias <- diff(seq(as.Date("2017-01-01"), Sys.Date()+16, by = "month"))
 dias_mes <- as.integer(dias[length(dias)])
 #Cambiar el -1 por el último dia del que se tengan datos, es decir, si son de antier va un -2.
-diahoy <- Sys.Date()-2
+diahoy <- Sys.Date()-1
 
 ###############################################################################################################
-#                           Funcion que asigna la comision de acuerdo al monto                                #
+#                                               Datos                                                         #
+###############################################################################################################
+
+datos <- read.csv("datos.csv",header = TRUE)
+datos <- cbind(datos,Codigo=paste0(datos$emisora," ",datos$serie))
+datos$Codigo <- gsub( "\\+", "", datos$Codigo)
+
+###############################################################################################################
+#                                         Cajón en el mandato                                                 #
 ###############################################################################################################
 
 cajon <- function(monto){
@@ -28,34 +36,6 @@ cajon <- function(monto){
   return(renglon)
 }
 
-cajon2 <- function(monto){
-  montos <- c(999999,4999999,29999999,99999999,100000000)
-  series <- c('C-4','C-3','C-2','C-1','C-0')
-  if(monto < montos[1]){renglon <- series[1]}
-  if(between(monto,montos[1],montos[2])){renglon <- series[2]}
-  if(between(monto,montos[2],montos[3])){renglon <- series[3]}
-  if(between(monto,montos[3],montos[4])){renglon <- series[4]}
-  if(monto > montos[5]){renglon <- series[5]}
-  return(renglon)
-}
-
-cajon3 <- function(monto){
-  series <- c("F1","F3")
-  montos <- 9999999
-  
-  if(monto <= montos){renglon <- series[1]}
-  if(monto > montos){renglon <- series[2]}
-  return(renglon)
-}
-
-###############################################################################################################
-#                                               Datos                                                         #
-###############################################################################################################
-
-datos <- read.csv("datos.csv",header = TRUE)
-datos <- cbind(datos,Codigo=paste0(datos$emisora," ",datos$serie))
-datos$Codigo <- gsub( "\\+", "", datos$Codigo)
-
 ###############################################################################################################
 #                                        Carteras Testigo                                                     #
 ###############################################################################################################
@@ -67,15 +47,12 @@ datos <- datos %>% filter(testigo == "No Sacar")
 datos$testigo <-  NULL
 
 ###############################################################################################################
-#                                        Posiciones con fondos                                                #
+#                                        Posiciones sin fondos                                                #
 ###############################################################################################################
 
 lista <- c("AXESEDM","NAVIGTR","+CIGUB","+CIGUMP","+CIGULP","+CIPLUS","+CIUSD","+CIEQUS","+CIBOLS")
 funds <- ifelse(datos$emisora %in% lista, "Fondo", "No Fondo")
 datos <- cbind(datos,funds)
-
-fondos <- datos %>% filter(funds == "Fondo")
-fondos <- data.frame(fecha =fondos$fecha,contrato =fondos$contrato,mon = fondos$mon,Codigo =fondos$Codigo)
 
 sinfondos <- datos %>% filter(funds == "No Fondo")
 #La siguiente linea se usa en caso de cobrar con mandato lo que pueda estar en fondos.
@@ -107,21 +84,6 @@ indicese <- match(sinfondos$contrato,especiales$Titular)
 descuento <- 1 - especiales$Descuento[indicese]
 descuento[is.na(descuento)] <- 1
 sinfondos <- cbind(sinfondos,Descuento=descuento)
-
-###############################################################################################################
-#                                    Comisiones por instrumentos en fondos                                    #
-###############################################################################################################
-
-comision_fondo <- data.frame(read_excel("comisiones.xlsx",sheet = 'ComisionesFondos'))
-comision_fondo$Fondo <- as.character(comision_fondo$Fondo)
-indicesc <- match(fondos$Codigo,comision_fondo$Fondo)
-comision_anualf <- comision_fondo$Comision[indicesc]
-comision_diariaf <- comision_anualf / 365
-comisionf <- fondos$mon * comision_diariaf
-fondos <- cbind(fondos,Comision = comision_diariaf,MontoComision = comisionf)
-comisionfondos <- dias_mes*sum(fondos$MontoComision)/as.numeric(length(unique(fondos$fecha)))
-montofondos <- fondos %>% group_by(contrato) %>% summarise(MontoComision = sum(MontoComision))
-montofondos$MontoComision <- dias_mes*montofondos$MontoComision/as.numeric(length(unique(fondos$fecha)))
 
 ###############################################################################################################
 #                              Comisiones por instrumentos fuera de fondos                                    #
@@ -164,7 +126,7 @@ contratos <- colnames(diario)
 cartera <- as.character(sinfondos$cartera[match(contratos,sinfondos$contrato)])
 cobro <- data.frame(cbind(Contrato = contratos,SaldoProm = saldopromedio,Cartera = cartera))
 cobro$SaldoProm <- as.numeric(as.character(cobro$SaldoProm))
-Datoscobro <- sinfondos %>% group_by(contrato) %>% summarise(Promediogrupal = sum(Monto_Grupal)/as.numeric(length(unique(fondos$fecha))), 
+Datoscobro <- sinfondos %>% group_by(contrato) %>% summarise(Promediogrupal = sum(Monto_Grupal)/as.numeric(length(unique(sinfondos$fecha))), 
                                                              Descuento = mean(1-Descuento),
                                                              Bonificacion = sum(Bonificacion))
 
@@ -178,50 +140,6 @@ for (i in seq(1,length(indicescolumna),1)){
 
 Datoscobro <- cbind(Datoscobro,Anual = comision_anuals)
 
-#CIBOLS y CIEQUS (sólo por la reclasificacion tardía).
-fondos$Codigo <- as.character(fondos$Codigo)
-prueba <- fondos %>% 
-  filter(Codigo == "CIBOLS C-0" | Codigo == "CIEQUS C-0") %>% 
-  group_by(contrato) %>% summarise(Monto = sum(mon)/as.numeric(length(unique(fondos$fecha))),
-                                                       MontoComision = dias_mes*sum(MontoComision)/as.numeric(length(unique(fondos$fecha))))
-serie <- sapply(prueba$Monto,cajon2)
-codigo <- paste0("CIBOLS ",serie)
-indicesci <- match(codigo,comision_fondo$Fondo)
-comision_anualci <- comision_fondo$Comision[indicesci]
-comision_anualci <- ifelse(is.na(comision_anualci) == TRUE, 0, comision_anualci)
-comision_diariaci <- dias_mes*comision_anualci / 360
-comisionci <- prueba$Monto * comision_diariaci
-prueba <- data.frame(cbind(prueba,MontoComision2 = comisionci))
-prueba$MontoComision2 <- as.numeric(as.character(prueba$MontoComision2))
-i <- match(prueba$contrato,Datoscobro$contrato)
-MontoComision3 <- prueba$MontoComision2 - prueba$MontoComision
-MontoComision3 <- ifelse(MontoComision3 < 0 , 0, MontoComision3)
- 
-comisionfondos2 <- MontoComision3[match(contratos,prueba$contrato)]
-comisionfondos2 <- ifelse(is.na(comisionfondos2) == TRUE, 0, comisionfondos2)
-
-#AXESEDM (sólo por la reclasificacion tardía)
-prueba2 <- fondos %>% 
-  filter(Codigo == "AXESEDM F3") %>% 
-  group_by(contrato) %>% summarise(Monto = sum(mon)/as.numeric(length(unique(fondos$fecha))),
-                                   MontoComision = dias_mes*sum(MontoComision)/as.numeric(length(unique(fondos$fecha))))
-serie <- sapply(prueba2$Monto,cajon3)
- codigo <- paste0("AXESEDM ",serie)
- indicesci <- match(codigo,comision_fondo$Fondo)
- comision_anualci <- comision_fondo$Comision[indicesci]
- comision_anualci <- ifelse(is.na(comision_anualci) == TRUE, 0, comision_anualci)
- comision_diariaci <- dias_mes*comision_anualci / 360
- comisionci <- prueba2$Monto * comision_diariaci
- prueba2 <- data.frame(cbind(prueba2,MontoComision2 = comisionci))
- prueba2$MontoComision2 <- as.numeric(as.character(prueba2$MontoComision2))
- i <- match(prueba2$contrato,Datoscobro$contrato)
- MontoComision4 <- prueba2$MontoComision2 - prueba2$MontoComision
- MontoComision4 <- ifelse(MontoComision4 < 0 , 0, MontoComision4)
- 
- comisionfondos3 <- MontoComision4[match(contratos,prueba2$contrato)]
- comisionfondos3 <- ifelse(is.na(comisionfondos3) == TRUE, 0, comisionfondos3)
-
-
 comision <- dias_mes*Datoscobro$Anual/360
 comisiondesc <- comision * (1-Datoscobro$Descuento)
 #############
@@ -229,14 +147,14 @@ monto <- (cobro$SaldoProm * dias_mes*Datoscobro$Anual/360)
 monto <- ifelse(Datoscobro$Bonificacion <= 0, monto,Datoscobro$Bonificacion/1.16)
 #############
 montodesc <- (saldopromedio * comisiondesc)
-montodesc <- ifelse(montodesc < 0, 0, montodesc) + comisionfondos2 + comisionfondos3
+montodesc <- ifelse(montodesc < 0, 0, montodesc)
 montodesc <- ifelse(Datoscobro$Bonificacion <= 0, montodesc,Datoscobro$Bonificacion/1.16)
 montoiva <- montodesc * 1.16
 montoneto <- ifelse(Datoscobro$Bonificacion <= 0, montodesc*1.16,Datoscobro$Bonificacion)
 cobro <- cbind(cobro,Anual = Datoscobro$Anual,Comision = comision, Descuento = Datoscobro$Descuento,
-               ComisionConDescuento = comisiondesc, Monto = monto, MontoFondos = comisionfondos2+comisionfondos3, 
-               MontoconDescuento = montodesc, MontoIVA = montoiva, 
-               Bonificacion = Datoscobro$Bonificacion,MontoNetoIVA = montoneto, CobroFinal = montoneto)
+               ComisionConDescuento = comisiondesc, Monto = monto, MontoconDescuento = montodesc, 
+               MontoIVA = montoiva, Bonificacion = Datoscobro$Bonificacion,MontoNetoIVA = montoneto, 
+               CobroFinal = montoneto)
 
 cobro[-c(1,3)] <- cobro[-c(1,3)] %>% lapply(as.character) %>% lapply(as.numeric)
 
@@ -267,10 +185,9 @@ efectivosuficiente <- sum(ifelse(efectivo$Efectivo > efectivo$Cobro,efectivo$Cob
 ###############################################################################################################
 
 nomresumen <- c('Dias en el mes','Suma sin Descuentos','Suma neta sin IVA','Suma neta con IVA',
-                'Suma neta con IVA quitando fondos insuficientes','Suma total en fondos')
-resumen <- data.frame(matrix(c(dias_mes,sum(cobro$Monto)+sum(comisionfondos2)+sum(comisionfondos3), 
-                               sum(cobro$MontoconDescuento),sum(cobro$MontoNetoIVA), efectivosuficiente, 
-                               comisionfondos), nrow = 6),row.names = nomresumen)
+                'Suma neta con IVA quitando fondos insuficientes')
+resumen <- data.frame(matrix(c(dias_mes,sum(cobro$Monto), sum(cobro$MontoconDescuento),sum(cobro$MontoNetoIVA), 
+                               efectivosuficiente), nrow = 5),row.names = nomresumen)
 
 ###############################################################################################################
 #                                                Excel                                                        #
