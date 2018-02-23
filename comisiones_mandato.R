@@ -10,13 +10,16 @@ library(xlsx)
 dias <- diff(seq(as.Date("2017-01-01"), Sys.Date()+16, by = "month"))
 dias_mes <- as.integer(dias[length(dias)])
 #Cambiar el -1 por el último dia del que se tengan datos, es decir, si son de antier va un -2.
-diahoy <- Sys.Date()-1
+diahoy <- Sys.Date() - 3
 
 ###############################################################################################################
 #                                               Datos                                                         #
 ###############################################################################################################
 
-datos <- read.csv("datos.csv",header = TRUE)
+hoy <- Sys.Date()
+mes <- substr(hoy,6,7)
+ao <- substr(hoy,1,4)
+datos <- get_position(seq_Date(paste0(ao,mes,"01/")))
 datos <- cbind(datos,Codigo=paste0(datos$emisora," ",datos$serie))
 datos$Codigo <- gsub( "\\+", "", datos$Codigo)
 

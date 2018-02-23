@@ -16,7 +16,9 @@ dias_mes <- as.integer(dias[length(dias)])
 #                                               Datos                                                         #
 ###############################################################################################################
 
-datos <- read.csv("datos2.csv",header = TRUE)
+hoy <- Sys.Date()
+ffecha <- (seq(hoy,length.out = 2, by = "-1 month")-1)[2]
+datos <- get_position(seq(ffecha,Sys.Date()-2,by = "1 day"))
 datos <- cbind(datos,Codigo=paste0(datos$emisora," ",datos$serie))
 datos$Codigo <- gsub( "\\+", "", datos$Codigo)
 datos$TV <- ifelse(datos$emisora == "NAVIGTR",52,substr(as.character(datos$id),start = 1,stop = 2))
