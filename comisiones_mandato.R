@@ -2,6 +2,7 @@ library(dplyr)
 library(tidyr)
 library(readxl)
 library(xlsx)
+library(FundTools)
 
 ###############################################################################################################
 #                                           Dias del mes                                                      #
