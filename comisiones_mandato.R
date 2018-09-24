@@ -11,7 +11,7 @@ library(FundTools)
 dias <- diff(seq(as.Date("2017-01-01"), Sys.Date()+16, by = "month"))
 dias_mes <- as.integer(dias[length(dias)])
 #Cambiar el -1 por el último dia del que se tengan datos, es decir, si son de antier va un -2.
-diahoy <- Sys.Date() - 3
+diahoy <- Sys.Date() - 1
 
 ###############################################################################################################
 #                                               Datos                                                         #
@@ -58,7 +58,7 @@ lista <- c("AXESEDM","NAVIGTR","+CIGUB","+CIGUMP","+CIGULP","+CIPLUS","+CIUSD","
 funds <- ifelse(datos$emisora %in% lista, "Fondo", "No Fondo")
 datos <- cbind(datos,funds)
 
-sinfondos <- datos %>% filter(funds == "No Fondo")
+sinfondos <- datos %>% filter(funds == "No Fondo" & emisora != "EFECTIVO")
 #La siguiente linea se usa en caso de cobrar con mandato lo que pueda estar en fondos.
 #sinfondos <- datos
 sinfondos <- data.frame(fecha =sinfondos$fecha,contrato =sinfondos$contrato,cartera = sinfondos$carteramodelo ,
